@@ -13,6 +13,22 @@ pub fn peek(self: Self) ?u8 {
     return self.input[self.cursor];
 }
 
+pub fn parseAny(self: *Self) !u8 {
+    if (self.peek()) |c| {
+        self.consume(1);
+        return c;
+    }
+    return error.EndOfInput;
+}
+
+pub fn parseAnyN(self: *Self, n: usize) ![]const u8 {
+    const start = self.getInput();
+    for (0..n) |_| {
+        _ = try self.parseAny();
+    }
+    return start[0..n];
+}
+
 pub fn parseMaybe(self: *Self, b: u8) bool {
     if (self.peek()) |c| {
         if (c == b) {
@@ -97,6 +113,23 @@ test "parseMaybe" {
     // Should consume if matches
     try std.testing.expect(p.parseMaybe('a'));
     try std.testing.expectEqual('b', p.peek());
+}
+
+test "parseAny" {
+    const input = "kab";
+
+    var p = Self{ .input = input };
+    try std.testing.expectEqual('k', try p.parseAny());
+    try std.testing.expectEqual('a', p.peek());
+}
+
+test "parseAnyN" {
+    const input = "abcdefg";
+
+    var p = Self{ .input = input };
+    try std.testing.expectEqualStrings("abcd", try p.parseAnyN(4));
+    try std.testing.expectEqualStrings("efg", try p.parseAnyN(3));
+    try std.testing.expectEqual(null, p.peek());
 }
 
 test "parseOneOf" {
