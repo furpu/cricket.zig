@@ -21,20 +21,27 @@ const Tag = enum(u5) {
     _,
 };
 
-// TODO:
-// 1. Differ between bit string, octect string, sequence of and set of
-// 2. Differ between sequence and set
-// 3. Allow CHOICE (union)
-// 4. Allow OBJECT IDENTIFIER (int slice?)
 pub fn parse(comptime T: type, parser: *Parser) !T {
     const parser_cursor_start = parser.cursor;
     errdefer parser.cursor = parser_cursor_start;
 
     switch (T) {
         Value => return Value.parseOne(parser),
+        Value.BitString => {
+            const val = try Value.parseOne(parser);
+            return val.asBitString();
+        },
         Value.ObjectIdentifier => {
             const val = try Value.parseOne(parser);
             return val.asObjectIdentifier();
+        },
+        Value.Sequence => {
+            const val = try Value.parseOne(parser);
+            return val.asSequence();
+        },
+        Value.Set => {
+            const val = try Value.parseOne(parser);
+            return val.asSet();
         },
         else => {},
     }
@@ -46,10 +53,10 @@ pub fn parse(comptime T: type, parser: *Parser) !T {
 
             return int_val.toFixed(T);
         },
-        .Pointer => |ptr_info| {
-            if (ptr_info.size != .Slice) @compileError("Pointer types must be slices");
+        .Pointer => |ptr_type| {
+            if (ptr_type.size != .Slice) @compileError("Pointer types must be slices");
 
-            switch (ptr_info.child) {
+            switch (ptr_type.child) {
                 u8 => {
                     const val = try Value.parseOne(parser);
                     const octet_string_val = try val.asOctetString();
@@ -59,22 +66,22 @@ pub fn parse(comptime T: type, parser: *Parser) !T {
                 else => @compileError("Not a supported type"),
             }
         },
-        .Array => |arr_info| {
-            const slice_val = try parse([]arr_info.child, parser);
-            if (slice_val.len != arr_info.len) return error.WrongArrayLength;
+        .Array => |arr_type| {
+            const slice_val = try parse([]arr_type.child, parser);
+            if (slice_val.len != arr_type.len) return error.WrongArrayLength;
 
             var arr: T = undefined;
             @memcpy(&arr, slice_val);
 
             return arr;
         },
-        .Struct => |st_info| {
+        .Struct => |struct_type| {
             const val = try Value.parseOne(parser);
             const seq = try val.asSequence();
             var seq_parser = Parser{ .input = seq.bytes };
 
             var ret_val: T = undefined;
-            inline for (st_info.fields) |field| {
+            inline for (struct_type.fields) |field| {
                 // Optional are only allowed inside structured types so we must test this here.
                 switch (@typeInfo(field.type)) {
                     .Optional => |opt_info| {
@@ -89,6 +96,17 @@ pub fn parse(comptime T: type, parser: *Parser) !T {
             }
 
             return ret_val;
+        },
+        .Union => |union_type| {
+            inline for (union_type.fields) |field| {
+                if (parse(field.type, parser)) |val| {
+                    return @unionInit(T, field.name, val);
+                } else |err| switch (err) {
+                    error.EndOfInput => return err,
+                    else => {},
+                }
+            }
+            return error.Cast;
         },
         else => @compileError("Not a supported type"),
     }
@@ -135,7 +153,7 @@ pub const Value = union(enum) {
             return self.bytes[0];
         }
 
-        pub fn string(self: BitString) []const u8 {
+        pub fn contents(self: BitString) []const u8 {
             if (self.bytes.len <= 1) return &.{};
             return self.bytes[1..];
         }
@@ -188,6 +206,9 @@ pub const Value = union(enum) {
     };
 
     pub fn parseOne(p: *Parser) !Value {
+        const parser_cursor_start = p.cursor;
+        errdefer p.cursor = parser_cursor_start;
+
         const tag_byte = try p.parseAny();
         if (tag_byte == 0x1F) {
             return error.HighTagNumberNotSupported;
@@ -407,6 +428,21 @@ test "parse" {
     // with optional value included in the sequence
     p = .{ .input = &.{ @intFromEnum(Tag.sequence), 11, @intFromEnum(Tag.integer), 1, 5, @intFromEnum(Tag.integer), 1, 0xF5, @intFromEnum(Tag.octet_string), 3, 1, 2, 3 } };
     try std.testing.expectEqualDeep(TestT{ .i = 5, .s = &.{ 1, 2, 3 }, .o = -11 }, try parse(TestT, &p));
+
+    // Union (CHOICE)
+    const TestUnion = union(enum) {
+        s: []const u8,
+        i: i32,
+    };
+
+    p = .{ .input = &.{ @intFromEnum(Tag.integer), 1, 8 } };
+    try std.testing.expectEqualDeep(TestUnion{ .i = 8 }, try parse(TestUnion, &p));
+
+    p = .{ .input = &.{ @intFromEnum(Tag.octet_string), 3, 'a', 'b', 'c' } };
+    try std.testing.expectEqualDeep(TestUnion{ .s = "abc" }, try parse(TestUnion, &p));
+
+    p = .{ .input = &.{ @intFromEnum(Tag.bit_string), 1, 0 } };
+    try std.testing.expectError(error.Cast, parse(TestUnion, &p));
 }
 
 test "Value.parse" {

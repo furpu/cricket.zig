@@ -67,8 +67,6 @@ const PemParser = struct {
         errdefer self.inner.cursor = cursor_start;
 
         const label_slice = try self.inner.parseMany1(isLabelChar);
-
-        // TODO: rollback cursor on error
         const label = try allocator.alloc(u8, label_slice.len);
         @memcpy(label, label_slice);
 
