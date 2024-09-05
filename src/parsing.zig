@@ -125,23 +125,29 @@ test "parse" {
     const parsed = try parse(std.testing.allocator, pem_str);
     defer parsed.deinit();
 
+    const AlgIdentifier = struct {
+        algorithm: der.Value.ObjectIdentifier,
+        parameters: ?der.Value,
+    };
     const PrivKeyInfo = struct {
         version: i32,
-        alg: struct {
-            algorithm: der.Value,
-            parameters: ?der.Value,
-        },
+        alg: AlgIdentifier,
         key: []const u8,
         attributes: ?der.Value, // ignored
     };
 
     const EccKeyInfo = struct {
-        idk: i32,
+        version: i32,
         key: [32]u8,
     };
 
     var parser = Parser{ .input = parsed.msg };
     const pki = try der.parse(PrivKeyInfo, &parser);
+
+    var buffer: [17]u8 = .{0} ** 17;
+    var stream = std.io.fixedBufferStream(&buffer);
+    try pki.alg.algorithm.print(stream.writer().any());
+    try std.testing.expectEqualStrings("1.2.840.10045.2.1", stream.buffer);
 
     parser = .{ .input = pki.key };
     const ki = try der.parse(EccKeyInfo, &parser);

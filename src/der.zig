@@ -30,8 +30,13 @@ pub fn parse(comptime T: type, parser: *Parser) !T {
     const parser_cursor_start = parser.cursor;
     errdefer parser.cursor = parser_cursor_start;
 
-    if (T == Value) {
-        return Value.parseOne(parser);
+    switch (T) {
+        Value => return Value.parseOne(parser),
+        Value.ObjectIdentifier => {
+            const val = try Value.parseOne(parser);
+            return val.asObjectIdentifier();
+        },
+        else => {},
     }
 
     switch (@typeInfo(T)) {
@@ -142,6 +147,21 @@ pub const Value = union(enum) {
 
     pub const ObjectIdentifier = struct {
         bytes: []const u8,
+
+        pub fn iterator(self: ObjectIdentifier) OidIterator {
+            return OidIterator.init(self.bytes);
+        }
+
+        pub fn print(self: ObjectIdentifier, writer: std.io.AnyWriter) !void {
+            var iter = self.iterator();
+            var first = true;
+            // TODO: using i64 here to allow for very large numbers but this smells.
+            while (try iter.next(i64)) |v| {
+                if (!first) try writer.writeByte('.');
+                try writer.print("{}", .{v});
+                first = false;
+            }
+        }
     };
 
     pub const Sequence = struct {
@@ -185,11 +205,10 @@ pub const Value = union(enum) {
 
             var length_octets: [max_octets_count]u8 = .{0} ** max_octets_count;
             for (0..octets_count) |i| {
-                // Length octects in big endian order
-                length_octets[max_octets_count - octets_count + i] = try p.parseAny();
+                length_octets[i] = try p.parseAny();
             }
 
-            length = mem.readInt(usize, &length_octets, .big);
+            length = mem.readVarInt(usize, length_octets[0..octets_count], .big);
         } else {
             length = @intCast(length_byte);
         }
@@ -270,6 +289,101 @@ pub const ValueIterator = struct {
     }
 };
 
+pub const OidIterator = struct {
+    _c: usize = 0,
+    parser: Parser,
+
+    pub fn init(bytes: []const u8) OidIterator {
+        return .{ .parser = .{ .input = bytes } };
+    }
+
+    pub fn next(self: *OidIterator, comptime IntT: type) !?IntT {
+        const component = switch (self._c) {
+            0 => self.parseFirstComponent(IntT),
+            1 => self.parseSecondComponent(IntT),
+            else => self.parseComponent(IntT),
+        };
+        self._c += 1;
+        return component;
+    }
+
+    fn parseFirstComponent(self: *OidIterator, comptime IntT: type) ?IntT {
+        if (self.parser.peek()) |b| {
+            return switch (b) {
+                0...39 => 0,
+                40...79 => 1,
+                else => 2,
+            };
+        }
+        return null;
+    }
+
+    fn parseSecondComponent(self: *OidIterator, comptime IntT: type) ?IntT {
+        var first_comp: IntT = undefined;
+        if (self.parseFirstComponent(IntT)) |c| {
+            first_comp = c;
+        } else {
+            return null;
+        }
+
+        const b = self.parser.parseAny() catch unreachable;
+        if (first_comp == 2) return b - 80;
+        return b % 40;
+    }
+
+    // TODO: Refactor this. I wrote this while trying to understand the decoding logic.
+    fn parseComponent(self: *OidIterator, comptime IntT: type) !?IntT {
+        const max_byte_count = @sizeOf(IntT);
+        const max_bit_count = max_byte_count * 8;
+        var bits: [max_bit_count]u8 = .{0} ** max_bit_count;
+
+        var i: usize = 0;
+        while (true) {
+            const b = self.parser.parseAny() catch {
+                if (i == 0) return null;
+                return error.MissingComponentBytes;
+            };
+
+            var n: u3 = 7;
+            while (n > 0) {
+                n -= 1;
+                bits[i] = (b >> n) & 0x01;
+
+                i += 1;
+                if (i == max_bit_count) return error.ValueOverflow;
+            }
+
+            if (b & 0x80 == 0) break;
+        }
+
+        // Build bytes from bit string
+        var bytes: [max_byte_count]u8 = .{0} ** max_byte_count;
+        var s: u3 = @intCast(i % 8 -% 1); // account for padding
+        var n: usize = 0;
+        var byte: u8 = 0;
+
+        for (0..i) |k| {
+            const bit = bits[k];
+            byte |= bit << s;
+            if (s == 0) {
+                bytes[n] = byte;
+
+                byte = 0;
+                n += 1;
+                s = 7;
+            } else {
+                s -= 1;
+            }
+        }
+
+        return mem.readVarInt(IntT, bytes[0..n], .big);
+    }
+
+    fn hasNextByte(c: u8) bool {
+        return c >> 7;
+    }
+};
+
 test "parse" {
     // int
     var p = Parser{ .input = &.{ @intFromEnum(Tag.integer), 1, 3 } };
@@ -346,5 +460,16 @@ test "ValueIterator" {
     var i: usize = 0;
     while (try iter.next()) |elem_val| : (i += 1) {
         try std.testing.expectEqualDeep(expected[i], elem_val);
+    }
+}
+
+test "OidIterator" {
+    // Encoding of OID = "1.2.840.113549.1.1.5"
+    var iter = OidIterator.init(&.{ 42, 134, 72, 134, 247, 13, 1, 1, 5 });
+    const expected = [_]i32{ 1, 2, 840, 113549, 1, 1, 5 };
+
+    var i: usize = 0;
+    while (try iter.next(i32)) |v| : (i += 1) {
+        try std.testing.expectEqual(expected[i], v);
     }
 }
