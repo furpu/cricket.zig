@@ -5,6 +5,7 @@ const big = std.math.big;
 const builtin = @import("builtin");
 const mem = std.mem;
 
+const base128 = @import("base128.zig");
 const Parser = @import("Parser.zig");
 
 const Allocator = std.mem.Allocator;
@@ -352,52 +353,24 @@ pub const OidIterator = struct {
         return b % 40;
     }
 
-    // TODO: Refactor this. I wrote this while trying to understand the decoding logic.
     fn parseComponent(self: *OidIterator, comptime IntT: type) !?IntT {
         const max_byte_count = @sizeOf(IntT);
         const max_bit_count = max_byte_count * 8;
-        var bits: [max_bit_count]u8 = .{0} ** max_bit_count;
 
-        var i: usize = 0;
+        const cursor_start = self.parser.cursor;
+        var len: usize = 0;
         while (true) {
-            const b = self.parser.parseAny() catch {
-                if (i == 0) return null;
-                return error.MissingComponentBytes;
-            };
-
-            var n: u3 = 7;
-            while (n > 0) {
-                n -= 1;
-                bits[i] = (b >> n) & 0x01;
-
-                i += 1;
-                if (i == max_bit_count) return error.ValueOverflow;
-            }
-
+            const b = self.parser.parseAny() catch return null;
+            len += 1;
+            if (len * 7 > max_bit_count) return error.Overflow;
             if (b & 0x80 == 0) break;
         }
 
-        // Build bytes from bit string
-        var bytes: [max_byte_count]u8 = .{0} ** max_byte_count;
-        var s: u3 = @intCast(i % 8 -% 1); // account for padding
-        var n: usize = 0;
-        var byte: u8 = 0;
+        self.parser.cursor = cursor_start;
+        const bytes = self.parser.parseAnyN(len) catch unreachable;
+        var buf: [@divTrunc(max_bit_count, 7)]u8 = undefined;
 
-        for (0..i) |k| {
-            const bit = bits[k];
-            byte |= bit << s;
-            if (s == 0) {
-                bytes[n] = byte;
-
-                byte = 0;
-                n += 1;
-                s = 7;
-            } else {
-                s -= 1;
-            }
-        }
-
-        return mem.readVarInt(IntT, bytes[0..n], .big);
+        return mem.readVarInt(IntT, base128.decode(bytes, &buf), .big);
     }
 
     fn hasNextByte(c: u8) bool {
