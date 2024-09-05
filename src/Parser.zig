@@ -72,6 +72,18 @@ pub fn parseMany1(self: *Self, pred: Predicate) ![]const u8 {
     return at[0..offset];
 }
 
+pub fn parseVlq(self: *Self) ![]const u8 {
+    const at = self.getInput();
+    var offset: usize = 0;
+    while (self.peek()) |c| {
+        offset += 1;
+        self.consume(1);
+        if (c & 0x80 == 0) break;
+    }
+    if (offset == 0) return error.Parse;
+    return at[0..offset];
+}
+
 pub fn skip(self: *Self, pred: Predicate) void {
     while (self.peek()) |c| {
         if (!pred(c)) break;
@@ -159,6 +171,15 @@ test "parseMany1" {
 
     try std.testing.expectEqualStrings("ababaab", try p.parseMany1(isAb));
     try p.parseString("cde");
+}
+
+test "parseVlq" {
+    const input = &.{ 140, 130, 120, 110, 100 };
+
+    var p = Self{ .input = input };
+
+    try std.testing.expectEqualSlices(u8, &.{ 140, 130, 120 }, try p.parseVlq());
+    try std.testing.expectEqual(110, p.peek());
 }
 
 test "skip" {

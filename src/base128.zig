@@ -5,6 +5,10 @@ pub fn calcBufSize(len: usize) usize {
     return len * 8 / 7;
 }
 
+pub fn calcBufSizeComptime(len: comptime_int) comptime_int {
+    return @divTrunc(len * 8, 7);
+}
+
 pub fn decode(input: []const u8, buf: []u8) []const u8 {
     var in_cursor = input.len;
     var buf_cursor = buf.len;

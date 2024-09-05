@@ -355,22 +355,12 @@ pub const OidIterator = struct {
 
     fn parseComponent(self: *OidIterator, comptime IntT: type) !?IntT {
         const max_byte_count = @sizeOf(IntT);
-        const max_bit_count = max_byte_count * 8;
 
-        const cursor_start = self.parser.cursor;
-        var len: usize = 0;
-        while (true) {
-            const b = self.parser.parseAny() catch return null;
-            len += 1;
-            if (len * 7 > max_bit_count) return error.Overflow;
-            if (b & 0x80 == 0) break;
-        }
+        const vlq_bytes = self.parser.parseVlq() catch return null;
+        if (base128.calcBufSize(vlq_bytes.len) > max_byte_count) return error.Overflow;
 
-        self.parser.cursor = cursor_start;
-        const bytes = self.parser.parseAnyN(len) catch unreachable;
-        var buf: [@divTrunc(max_bit_count, 7)]u8 = undefined;
-
-        return mem.readVarInt(IntT, base128.decode(bytes, &buf), .big);
+        var buf: [base128.calcBufSizeComptime(max_byte_count)]u8 = undefined;
+        return mem.readVarInt(IntT, base128.decode(vlq_bytes, &buf), .big);
     }
 
     fn hasNextByte(c: u8) bool {
