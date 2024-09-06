@@ -1,15 +1,11 @@
 // Reference: https://luca.ntop.org/Teaching/Appunti/asn1.html
 
 const std = @import("std");
-const big = std.math.big;
-const builtin = @import("builtin");
 const mem = std.mem;
 
 const base128 = @import("base128.zig");
 const Parser = @import("Parser.zig");
 
-const Allocator = std.mem.Allocator;
-const ArenaAllocator = std.heap.ArenaAllocator;
 
 const Tag = enum(u5) {
     integer = 2,
