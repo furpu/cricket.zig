@@ -1,5 +1,5 @@
 .{
-    .name = "pem.zig",
+    .name = "cricket",
     .version = "0.0.0",
     // TODO:
     // .minimum_zig_version = "0.14.0",

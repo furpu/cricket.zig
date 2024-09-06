@@ -4,8 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    _ = b.addModule("cricket", .{
+        .root_source_file = b.path("src/cricket.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/pem.zig"),
+        .root_source_file = b.path("src/cricket.zig"),
         .target = target,
         .optimize = optimize,
     });
