@@ -3,9 +3,8 @@
 const std = @import("std");
 const mem = std.mem;
 
-const base128 = @import("base128.zig");
-const Parser = @import("Parser.zig");
-
+const base128 = @import("../utils/base128.zig");
+const Parser = @import("../Parser.zig");
 
 const Tag = enum(u5) {
     integer = 2,

@@ -3,8 +3,7 @@ const builtin = @import("builtin");
 const mem = std.mem;
 const ascii = std.ascii;
 
-pub const der = @import("der.zig");
-const Parser = @import("Parser.zig");
+const Parser = @import("../Parser.zig");
 
 const Allocator = mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
@@ -111,6 +110,7 @@ const PemParser = struct {
     }
 };
 
+pub const der = @import("der.zig");
 test "parse" {
     const pem_str =
         \\-----BEGIN PRIVATE KEY-----
