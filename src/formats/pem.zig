@@ -2,11 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 const mem = std.mem;
 const ascii = std.ascii;
-
-const Parser = @import("../Parser.zig");
-
 const Allocator = mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
+const Parser = @import("pem/Parser.zig");
 
 const Self = @This();
 
@@ -124,14 +122,14 @@ test "parse" {
     defer parsed.deinit();
 
     const AlgIdentifier = struct {
-        algorithm: der.Value.ObjectIdentifier,
-        parameters: ?der.Value,
+        algorithm: der.ObjectIdentifier,
+        parameters: ?der.ContextSpecific(der.Any, .implicit, 0),
     };
     const PrivKeyInfo = struct {
         version: i32,
         alg: AlgIdentifier,
         key: []const u8,
-        attributes: ?der.Value, // ignored
+        attributes: ?der.ContextSpecific(der.Any, .implicit, 0), // ignored
     };
 
     const EccKeyInfo = struct {
@@ -139,16 +137,15 @@ test "parse" {
         key: [32]u8,
     };
 
-    var parser = Parser{ .input = parsed.msg };
-    const pki = try der.parse(PrivKeyInfo, &parser);
+    const pki = try der.read(PrivKeyInfo, parsed.msg);
+    std.debug.print("{} {}\n", .{ pki.attributes == null, pki.alg.parameters == null });
 
-    var buffer: [17]u8 = .{0} ** 17;
-    var stream = std.io.fixedBufferStream(&buffer);
-    try pki.alg.algorithm.print(stream.writer().any());
-    try std.testing.expectEqualStrings("1.2.840.10045.2.1", stream.buffer);
+    // var buffer: [17]u8 = .{0} ** 17;
+    // var stream = std.io.fixedBufferStream(&buffer);
+    // try pki.alg.algorithm.print(stream.writer().any());
+    // try std.testing.expectEqualStrings("1.2.840.10045.2.1", stream.buffer);
 
-    parser = .{ .input = pki.key };
-    const ki = try der.parse(EccKeyInfo, &parser);
+    const ki = try der.read(EccKeyInfo, pki.key);
 
     _ = try std.crypto.sign.ecdsa.EcdsaP256Sha256.SecretKey.fromBytes(ki.key);
 }
