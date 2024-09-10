@@ -14,7 +14,9 @@ const internal = struct {
 };
 
 test {
-    std.testing.refAllDecls(formats);
-    std.testing.refAllDecls(utils);
-    std.testing.refAllDecls(internal);
+    comptime {
+        std.testing.refAllDecls(formats);
+        std.testing.refAllDecls(utils);
+        std.testing.refAllDecls(internal);
+    }
 }
