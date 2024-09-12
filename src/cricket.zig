@@ -9,14 +9,9 @@ pub const utils = struct {
     pub const base128 = @import("utils/base128.zig");
 };
 
-const internal = struct {
-    const Parser = @import("Parser.zig");
-};
-
 test {
     comptime {
-        std.testing.refAllDecls(formats);
-        std.testing.refAllDecls(utils);
-        std.testing.refAllDecls(internal);
+        std.testing.refAllDeclsRecursive(formats);
+        std.testing.refAllDeclsRecursive(utils);
     }
 }
