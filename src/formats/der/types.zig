@@ -126,6 +126,25 @@ pub const OctetString = struct {
 
         return .{ .bytes = bytes };
     }
+
+    /// Models a type that is DER encoded inside the bytes of an `OCTET STRING` value.
+    pub fn Nested(comptime T: type) type {
+        return struct {
+            value: T,
+
+            pub const __der_oc_str_nested: void = {};
+
+            const Self = @This();
+
+            pub fn read(reader: *Reader) !Self {
+                const octet_string = try OctetString.read(reader);
+                var bytes_reader = Reader.init(octet_string.bytes);
+                const value = try internal.read(T, &bytes_reader, .{});
+
+                return .{ .value = value };
+            }
+        };
+    }
 };
 
 /// ASN.1 `NULL` type.

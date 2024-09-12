@@ -1,3 +1,3 @@
 # cricket.zig
 
-Zig library for parsing and encoding cryptographic data formats.
+Zig library for encoding and decoding cryptographic data formats.

@@ -4,7 +4,7 @@ const mem = std.mem;
 const ascii = std.ascii;
 const Allocator = mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
-const Parser = @import("pem/Parser.zig");
+const Parser = @import("Pem/Parser.zig");
 
 const Self = @This();
 
@@ -107,45 +107,3 @@ const PemParser = struct {
         return ascii.isAlphanumeric(c) or c == '+' or c == '/' or c == '=';
     }
 };
-
-pub const der = @import("der.zig");
-test "parse" {
-    const pem_str =
-        \\-----BEGIN PRIVATE KEY-----
-        \\MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hb2
-        \\OF/2NxApJCzGCEDdfSp6VQO30hyhRANCAAQRWz+jn65BtOMvdyHKcvjBeBSDZH2r
-        \\1RTwjmYSi9R/zpBnuQ4EiMnCqfMPWiZqB4QdbAd0E7oH50VpuZ1P087G
-        \\-----END PRIVATE KEY-----
-    ;
-
-    const parsed = try parse(std.testing.allocator, pem_str);
-    defer parsed.deinit();
-
-    const AlgIdentifier = struct {
-        algorithm: der.ObjectIdentifier,
-        parameters: ?der.ContextSpecific(der.Any, .implicit, 0),
-    };
-    const PrivKeyInfo = struct {
-        version: i32,
-        alg: AlgIdentifier,
-        key: []const u8,
-        attributes: ?der.ContextSpecific(der.Any, .implicit, 0), // ignored
-    };
-
-    const EccKeyInfo = struct {
-        version: i32,
-        key: [32]u8,
-    };
-
-    const pki = try der.read(PrivKeyInfo, parsed.msg);
-    std.debug.print("{} {}\n", .{ pki.attributes == null, pki.alg.parameters == null });
-
-    // var buffer: [17]u8 = .{0} ** 17;
-    // var stream = std.io.fixedBufferStream(&buffer);
-    // try pki.alg.algorithm.print(stream.writer().any());
-    // try std.testing.expectEqualStrings("1.2.840.10045.2.1", stream.buffer);
-
-    const ki = try der.read(EccKeyInfo, pki.key);
-
-    _ = try std.crypto.sign.ecdsa.EcdsaP256Sha256.SecretKey.fromBytes(ki.key);
-}
