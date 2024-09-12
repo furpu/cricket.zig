@@ -34,24 +34,15 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     // TODO: figure out how to make this work using Zig's build system.
+    // i.e. make it move the generated files to the install folder.
     if (gen_coverage) {
-        @panic("Not implemented");
-        // lib_unit_tests.setExecCmd(&.{
-        //     "kcov",
-        //     "--include-path=src",
-        //     "--clean",
-        //     tmp_path,
-        //     null, // to get zig to use the --test-cmd-bin flag
-        // });
-        //
-        // const install_cov = b.addInstallDirectory(.{
-        //     .source_dir = tmp_path,
-        //     .install_dir = .prefix,
-        //     .install_subdir = "test-coverage",
-        // });
-        // install_cov.step.dependOn(&lib_unit_tests);
-        //
-        // lib_unit_tests = install_cov;
+        lib_unit_tests.setExecCmd(&.{
+            "kcov",
+            "--include-path=src",
+            "--clean",
+            "kcov-out",
+            null, // to get zig to use the --test-cmd-bin flag
+        });
     }
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
