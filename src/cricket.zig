@@ -7,7 +7,7 @@ pub const formats = struct {
 };
 
 pub const utils = struct {
-    pub const base128 = @import("utils/base128.zig");
+    pub const vlq = @import("utils/vlq.zig");
 };
 
 test {
