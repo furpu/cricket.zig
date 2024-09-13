@@ -4,6 +4,7 @@ const mem = std.mem;
 const Header = @import("Header.zig");
 const Reader = @import("Reader.zig");
 const internal = @import("internal.zig");
+const vlq = @import("../../utils/vlq.zig");
 
 pub const ReadError = error{
     NonCanonical,
@@ -168,6 +169,68 @@ pub const ObjectIdentifier = struct {
     /// Taken from https://github.com/RustCrypto/formats/blob/master/const-oid/src/lib.rs#L51.
     /// Limits the length of OIDs.
     const max_length = 39;
+
+    pub fn arcStringDecodeByteSize(s: []const u8) !usize {
+        var split_iter = std.mem.splitScalar(u8, s, '.');
+
+        if (split_iter.next() == null) return error.Empty;
+        if (split_iter.next() == null) return error.IncompleteFirstByte;
+
+        var size: usize = 1;
+        while (split_iter.next()) |arc_str| {
+            const arc = try std.fmt.parseUnsigned(u32, arc_str, 10);
+            size += vlq.calcEncodeBufSize(arc);
+        }
+        return size;
+    }
+
+    pub fn arcStringDecodeByteSizeComptime(comptime s: []const u8) usize {
+        return arcStringDecodeByteSize(s) catch |err| @compileError(@errorName(err));
+    }
+
+    pub fn fromArcString(s: []const u8, buf: []u8) !ObjectIdentifier {
+        var buf_stream = std.io.fixedBufferStream(buf);
+        var split_iter = std.mem.splitScalar(u8, s, '.');
+
+        // Decodes the first 2 numbers which represent the encoding of the
+        // first byte.
+        var first_arc: u8 = undefined;
+        if (split_iter.next()) |arc_str| {
+            const arc = try std.fmt.parseUnsigned(u8, arc_str, 10);
+            if (arc > 2) return error.NonCanonical;
+            first_arc = arc *% 40;
+        } else {
+            return error.Empty;
+        }
+
+        var second_arc: u8 = undefined;
+        if (split_iter.next()) |arc_str| {
+            const arc = try std.fmt.parseUnsigned(u8, arc_str, 10);
+            if (first_arc < 2 and arc >= 40) return error.NonCanonical;
+            second_arc = arc;
+        } else {
+            return error.IncompleteFirstByte;
+        }
+
+        _ = try buf_stream.write(&.{first_arc +% second_arc});
+
+        while (split_iter.next()) |arc_str| {
+            // I'm borrowing from RustCrypto's decision (https://docs.rs/const-oid/latest/const_oid/type.Arc.html):
+            // X.660 does not define a maximum size of an arc.
+            // The current representation is u32, which has been
+            // selected as being sufficient to cover the current PKCS/PKIX use cases this library has been used in conjunction with.
+            //
+            // Future versions may potentially make it larger if a sufficiently important use case is discovered.
+            const arc = try std.fmt.parseUnsigned(u32, arc_str, 10);
+
+            // Create a buffer that can hold the max arc value encoded in VLQ format.
+            var decode_buf: [vlq.calcEncodeBufSize(std.math.maxInt(u32))]u8 = undefined;
+            const decoded_slice = vlq.encode(arc, &decode_buf);
+            _ = try buf_stream.write(decoded_slice);
+        }
+
+        return .{ .bytes = buf_stream.getWritten() };
+    }
 
     pub fn read(reader: *Reader) ReadError!ObjectIdentifier {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.object_identifier), .universal);
@@ -337,6 +400,24 @@ test "Null.read" {
     try std.testing.expectError(error.NonCanonical, Null.read(&reader));
 
     try testAcceptsCorrectTagClass(Null, &.{}, Null{}, .{ .tag = universalTagNumber(.null) });
+}
+
+const test_oid = "1.2.840.113549.1.1.5";
+const test_oid_encoding = [_]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 5 };
+
+test "ObjectIdentifier.arcStringDecodeByteSize" {
+    const comptime_size = comptime ObjectIdentifier.arcStringDecodeByteSizeComptime(test_oid);
+    const size = try ObjectIdentifier.arcStringDecodeByteSize(test_oid);
+
+    try std.testing.expectEqual(test_oid_encoding.len, size);
+    try std.testing.expectEqual(comptime_size, size);
+}
+
+test "ObjectIdentifier.fromArcString" {
+    var buf: [ObjectIdentifier.arcStringDecodeByteSizeComptime(test_oid)]u8 = undefined;
+    const oid = try ObjectIdentifier.fromArcString(test_oid, &buf);
+
+    try std.testing.expectEqualSlices(u8, &test_oid_encoding, oid.bytes);
 }
 
 test "ObjectIdentifier.read" {
