@@ -163,12 +163,29 @@ pub const Null = struct {
 
 /// ASN.1 `OBJECT IDENTIFIER` type.
 pub const ObjectIdentifier = struct {
-    /// Bytes representing the OID.
-    bytes: []const u8,
+    /// Buffer used to hold the OIDs bytes.
+    /// We do it like this so it's possible to create OIDs at compile time and
+    /// to allow parsing from arc strings without requiring an external buffer.
+    buffer: [max_length]u8 = undefined,
+    /// Number of bytes in buffer that represent the OID.
+    len: usize,
 
     /// Taken from https://github.com/RustCrypto/formats/blob/master/const-oid/src/lib.rs#L51.
     /// Limits the length of OIDs.
     const max_length = 39;
+
+    pub fn init(bytes: []const u8) !ObjectIdentifier {
+        if (bytes.len > max_length) return error.OidTooLong;
+
+        var oid = ObjectIdentifier{ .buffer = undefined, .len = bytes.len };
+        std.mem.copyForwards(u8, oid.buffer[0..bytes.len], bytes);
+
+        return oid;
+    }
+
+    pub fn getBytes(self: *const ObjectIdentifier) []const u8 {
+        return self.buffer[0..self.len];
+    }
 
     pub fn arcStringDecodeByteSize(s: []const u8) !usize {
         var split_iter = std.mem.splitScalar(u8, s, '.');
@@ -188,8 +205,9 @@ pub const ObjectIdentifier = struct {
         return arcStringDecodeByteSize(s) catch |err| @compileError(@errorName(err));
     }
 
-    pub fn fromArcString(s: []const u8, buf: []u8) !ObjectIdentifier {
-        var buf_stream = std.io.fixedBufferStream(buf);
+    pub fn fromArcString(s: []const u8) !ObjectIdentifier {
+        var oid = ObjectIdentifier{ .buffer = undefined, .len = undefined };
+        var buf_stream = std.io.fixedBufferStream(&oid.buffer);
         var split_iter = std.mem.splitScalar(u8, s, '.');
 
         // Decodes the first 2 numbers which represent the encoding of the
@@ -229,7 +247,8 @@ pub const ObjectIdentifier = struct {
             _ = try buf_stream.write(decoded_slice);
         }
 
-        return .{ .bytes = buf_stream.getWritten() };
+        oid.len = buf_stream.getWritten().len;
+        return oid;
     }
 
     pub fn read(reader: *Reader) ReadError!ObjectIdentifier {
@@ -241,7 +260,7 @@ pub const ObjectIdentifier = struct {
         if (length > max_length) return error.OidTooLong;
         const bytes = try reader.readBytes(length);
 
-        return .{ .bytes = bytes };
+        return ObjectIdentifier.init(bytes);
     }
 };
 
@@ -414,17 +433,15 @@ test "ObjectIdentifier.arcStringDecodeByteSize" {
 }
 
 test "ObjectIdentifier.fromArcString" {
-    var buf: [ObjectIdentifier.arcStringDecodeByteSizeComptime(test_oid)]u8 = undefined;
-    const oid = try ObjectIdentifier.fromArcString(test_oid, &buf);
-
-    try std.testing.expectEqualSlices(u8, &test_oid_encoding, oid.bytes);
+    const oid = try ObjectIdentifier.fromArcString(test_oid);
+    try std.testing.expectEqualSlices(u8, &test_oid_encoding, oid.getBytes());
 }
 
 test "ObjectIdentifier.read" {
     // Happy path
     var reader = Reader.init(&.{ 6, 3, 1, 2, 3 });
     try std.testing.expectEqualDeep(
-        ObjectIdentifier{ .bytes = &.{ 1, 2, 3 } },
+        try ObjectIdentifier.init(&.{ 1, 2, 3 }),
         ObjectIdentifier.read(&reader),
     );
 
@@ -435,7 +452,7 @@ test "ObjectIdentifier.read" {
     try testAcceptsCorrectTagClass(
         ObjectIdentifier,
         &.{ 1, 2, 3 },
-        .{ .bytes = &.{ 1, 2, 3 } },
+        try ObjectIdentifier.init(&.{ 1, 2, 3 }),
         .{ .tag = universalTagNumber(.object_identifier) },
     );
 }
