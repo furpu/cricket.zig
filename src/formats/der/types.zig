@@ -58,7 +58,7 @@ pub const Integer = struct {
     ///
     /// Returns error.Overflow if the integer doesn't fit in the requested type.
     pub fn cast(self: Integer, comptime IntT: type) CastError!IntT {
-        const type_info = @typeInfo(IntT).Int;
+        const type_info = @typeInfo(IntT).int;
         if (type_info.bits / 8 < self.bytes.len) return error.Overflow;
 
         var val = mem.readVarInt(IntT, self.bytes, .big);
@@ -577,7 +577,7 @@ fn testAcceptsTagExclusive(comptime T: type, comptime value: []const u8, expecte
 }
 
 fn testAcceptsClassExclusive(comptime T: type, comptime value: []const u8, expected: T, params: TestAcceptsParams) !void {
-    const class_type_info = @typeInfo(Header.Tag.Class).Enum;
+    const class_type_info = @typeInfo(Header.Tag.Class).@"enum";
     inline for (class_type_info.fields) |field| {
         // We modify the tag to set the class bits.
         const tag_byte = @as(u8, params.tag) | (field.value << 6) | (@as(u8, @intFromBool(params.constructed)) << 5);

@@ -24,12 +24,12 @@ pub fn read(comptime T: type, reader: *Reader, opts: ReadOptions) !T {
     }
 
     switch (@typeInfo(T)) {
-        .Pointer => |type_info| return readPointer(type_info, reader, opts),
-        .Array => |type_info| return readArray(type_info, reader, opts),
-        .Int => return readInt(T, reader, opts),
-        .Struct => |type_info| return readStruct(T, type_info, reader, opts),
-        .Union => |type_info| return readUnion(T, type_info, reader, opts),
-        .Optional => @compileError("Optinals are not allowed outside a struct"),
+        .pointer => |type_info| return readPointer(type_info, reader, opts),
+        .array => |type_info| return readArray(type_info, reader, opts),
+        .int => return readInt(T, reader, opts),
+        .@"struct" => |type_info| return readStruct(T, type_info, reader, opts),
+        .@"union" => |type_info| return readUnion(T, type_info, reader, opts),
+        .optional => @compileError("Optinals are not allowed outside a struct"),
         else => @compileError("Not implemented for type '" ++ @typeName(T) ++ "'"),
     }
 }
@@ -75,7 +75,7 @@ fn readStruct(comptime T: type, type_info: Type.Struct, reader: *Reader, opts: R
     var ret_val: T = undefined;
     inline for (type_info.fields) |field| {
         @field(ret_val, field.name) = switch (@typeInfo(field.type)) {
-            .Optional => |field_type| try readOptional(field_type.child, &sequence_reader, opts),
+            .optional => |field_type| try readOptional(field_type.child, &sequence_reader, opts),
             else => try read(field.type, &sequence_reader, opts),
         };
     }

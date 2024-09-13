@@ -2,7 +2,7 @@
     .name = "cricket",
     .version = "0.1.0",
     // TODO:
-    // .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.14.0-dev.1550+4fba7336a",
     .dependencies = .{},
     .paths = .{
         "build.zig",

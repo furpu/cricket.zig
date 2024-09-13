@@ -6,11 +6,11 @@ const Type = std.builtin.Type;
 
 pub fn calcEncodeBufSize(val: anytype) usize {
     const float_type = switch (@typeInfo(@TypeOf(val))) {
-        .Int => |type_info| blk: {
+        .int => |type_info| blk: {
             if (type_info.signedness == .signed) @compileError("Signed integer types are not supported");
             break :blk f64;
         },
-        .ComptimeInt => blk: {
+        .comptime_int => blk: {
             break :blk comptime_float;
         },
         else => @compileError("Only integer types are supported"),
@@ -21,7 +21,7 @@ pub fn calcEncodeBufSize(val: anytype) usize {
 
 pub fn encode(val: anytype, buf: []u8) []const u8 {
     // TODO: support comptime_int?
-    const type_info = @typeInfo(@TypeOf(val)).Int;
+    const type_info = @typeInfo(@TypeOf(val)).int;
     if (type_info.signedness == .signed) @compileError("Signed integer types are not supported");
 
     var offset: u16 = 0;
