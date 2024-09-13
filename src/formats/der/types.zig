@@ -271,9 +271,13 @@ pub const ObjectIdentifier = struct {
         return self.buffer[0..self.len];
     }
 
+    pub fn matches(self: *const ObjectIdentifier, other: *const ObjectIdentifier) bool {
+        return std.mem.eql(u8, other.getBytes(), self.getBytes());
+    }
+
     pub fn matchesArcString(self: *const ObjectIdentifier, s: []const u8) !bool {
         const oid = try ObjectIdentifier.fromArcString(s);
-        return std.mem.eql(u8, oid.getBytes(), self.getBytes());
+        return self.matches(&oid);
     }
 };
 

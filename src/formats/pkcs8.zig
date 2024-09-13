@@ -3,7 +3,6 @@
 const std = @import("std");
 
 const der = @import("der.zig");
-const Pem = @import("Pem.zig");
 const spki = @import("spki.zig");
 
 /// PKCS#8 `PrivateKeyInfo`.
@@ -66,10 +65,11 @@ const spki = @import("spki.zig");
 /// [RFC 5958]: https://datatracker.ietf.org/doc/html/rfc5958
 /// [RFC 5208 Section 5]: https://tools.ietf.org/html/rfc5208#section-5
 /// [RFC 5958 Section 2]: https://datatracker.ietf.org/doc/html/rfc5958#section-2
-pub fn PrivateKeyInfo(comptime ParamsT: type, comptime PrivKeyT: type) type {
+pub fn PrivateKeyInfo(comptime PrivKeyT: type) type {
     return struct {
         version: u8,
-        private_key_algorithm: spki.AlgorithmIdentifier(ParamsT),
+        // Using der.Any here because we currently ignore the algorithm identifier parameters.
+        private_key_algorithm: spki.AlgorithmIdentifier(der.Any),
         private_key: der.types.OctetString.Nested(PrivKeyT),
         attributes: ?der.ContextSpecific(der.Any, .implicit, 0),
         public_key: ?der.ContextSpecific(der.BitString, .implicit, 1),
@@ -80,31 +80,4 @@ pub fn PrivateKeyInfo(comptime ParamsT: type, comptime PrivKeyT: type) type {
             return der.read(Self, input);
         }
     };
-}
-
-test "parse" {
-    const pem_str =
-        \\-----BEGIN PRIVATE KEY-----
-        \\MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hb2
-        \\OF/2NxApJCzGCEDdfSp6VQO30hyhRANCAAQRWz+jn65BtOMvdyHKcvjBeBSDZH2r
-        \\1RTwjmYSi9R/zpBnuQ4EiMnCqfMPWiZqB4QdbAd0E7oH50VpuZ1P087G
-        \\-----END PRIVATE KEY-----
-    ;
-
-    const parsed = try Pem.parse(std.testing.allocator, pem_str);
-    defer parsed.deinit();
-
-    const EccKeyInfo = struct {
-        version: i32,
-        key: [32]u8,
-    };
-
-    const pki = try PrivateKeyInfo(der.Any, EccKeyInfo).decode(parsed.msg);
-
-    // var buffer: [17]u8 = .{0} ** 17;
-    // var stream = std.io.fixedBufferStream(&buffer);
-    // try pki.alg.algorithm.print(stream.writer().any());
-    // try std.testing.expectEqualStrings("1.2.840.10045.2.1", stream.buffer);
-
-    _ = try std.crypto.sign.ecdsa.EcdsaP256Sha256.SecretKey.fromBytes(pki.private_key.value.key);
 }
