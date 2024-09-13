@@ -183,10 +183,6 @@ pub const ObjectIdentifier = struct {
         return oid;
     }
 
-    pub fn getBytes(self: *const ObjectIdentifier) []const u8 {
-        return self.buffer[0..self.len];
-    }
-
     pub fn arcStringDecodeByteSize(s: []const u8) !usize {
         var split_iter = std.mem.splitScalar(u8, s, '.');
 
@@ -214,11 +210,12 @@ pub const ObjectIdentifier = struct {
         // first byte.
         var first_arc: u8 = undefined;
         if (split_iter.next()) |arc_str| {
+            if (arc_str.len == 0) return error.Empty;
             const arc = try std.fmt.parseUnsigned(u8, arc_str, 10);
             if (arc > 2) return error.NonCanonical;
             first_arc = arc *% 40;
         } else {
-            return error.Empty;
+            unreachable;
         }
 
         var second_arc: u8 = undefined;
@@ -244,7 +241,10 @@ pub const ObjectIdentifier = struct {
             // Create a buffer that can hold the max arc value encoded in VLQ format.
             var decode_buf: [vlq.calcEncodeBufSize(std.math.maxInt(u32))]u8 = undefined;
             const decoded_slice = vlq.encode(arc, &decode_buf);
-            _ = try buf_stream.write(decoded_slice);
+            _ = buf_stream.write(decoded_slice) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.OidTooLong,
+                else => return err,
+            };
         }
 
         oid.len = buf_stream.getWritten().len;
@@ -265,6 +265,15 @@ pub const ObjectIdentifier = struct {
         const bytes = try reader.readBytes(length);
 
         return ObjectIdentifier.init(bytes);
+    }
+
+    pub fn getBytes(self: *const ObjectIdentifier) []const u8 {
+        return self.buffer[0..self.len];
+    }
+
+    pub fn matchesArcString(self: *const ObjectIdentifier, s: []const u8) !bool {
+        const oid = try ObjectIdentifier.fromArcString(s);
+        return std.mem.eql(u8, oid.getBytes(), self.getBytes());
     }
 };
 
@@ -426,6 +435,7 @@ test "Null.read" {
 }
 
 const test_oid = "1.2.840.113549.1.1.5";
+const invalid_long_test_oid = "1.2.113549.113549.113549.113549.113549.113549.113549.113549.113549.113549.113549.113549.113549.1";
 const test_oid_encoding = [_]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 5 };
 const const_oid = ObjectIdentifier.fromArcStringComptime(test_oid);
 
@@ -443,6 +453,14 @@ test "ObjectIdentifier.fromArcString" {
     try std.testing.expectEqualSlices(u8, &test_oid_encoding, oid.getBytes());
     // Make sure we are initializing comptime OIDs correctly as well.
     try std.testing.expectEqualDeep(oid, const_oid);
+
+    // Errors
+    try std.testing.expectError(error.Empty, ObjectIdentifier.fromArcString(""));
+    try std.testing.expectError(error.IncompleteFirstByte, ObjectIdentifier.fromArcString("1"));
+    try std.testing.expectError(error.InvalidCharacter, ObjectIdentifier.fromArcString("1."));
+    try std.testing.expectError(error.InvalidCharacter, ObjectIdentifier.fromArcString("1.2."));
+    try std.testing.expectError(error.InvalidCharacter, ObjectIdentifier.fromArcString("1.2.a"));
+    try std.testing.expectError(error.OidTooLong, ObjectIdentifier.fromArcString(invalid_long_test_oid));
 }
 
 test "ObjectIdentifier.read" {
@@ -463,6 +481,19 @@ test "ObjectIdentifier.read" {
         try ObjectIdentifier.init(&.{ 1, 2, 3 }),
         .{ .tag = universalTagNumber(.object_identifier) },
     );
+}
+
+test "ObjectIdentifier.matchesArcString" {
+    const oid = try ObjectIdentifier.fromArcString(test_oid);
+    try std.testing.expect(try oid.matchesArcString(test_oid));
+    try std.testing.expect(!(try oid.matchesArcString("1.2.5")));
+
+    // Errors
+    try std.testing.expectError(error.Empty, oid.matchesArcString(""));
+    try std.testing.expectError(error.InvalidCharacter, oid.matchesArcString("1."));
+    try std.testing.expectError(error.InvalidCharacter, oid.matchesArcString("1.2."));
+    try std.testing.expectError(error.InvalidCharacter, oid.matchesArcString("1.2.a"));
+    try std.testing.expectError(error.OidTooLong, oid.matchesArcString(invalid_long_test_oid));
 }
 
 test "Sequence.read" {
