@@ -251,6 +251,10 @@ pub const ObjectIdentifier = struct {
         return oid;
     }
 
+    pub fn fromArcStringComptime(comptime s: []const u8) ObjectIdentifier {
+        return fromArcString(s) catch |err| @compileError(@errorName(err));
+    }
+
     pub fn read(reader: *Reader) ReadError!ObjectIdentifier {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.object_identifier), .universal);
         return readValue(reader, header.length);
@@ -423,6 +427,7 @@ test "Null.read" {
 
 const test_oid = "1.2.840.113549.1.1.5";
 const test_oid_encoding = [_]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 5 };
+const const_oid = ObjectIdentifier.fromArcStringComptime(test_oid);
 
 test "ObjectIdentifier.arcStringDecodeByteSize" {
     const comptime_size = comptime ObjectIdentifier.arcStringDecodeByteSizeComptime(test_oid);
@@ -434,7 +439,10 @@ test "ObjectIdentifier.arcStringDecodeByteSize" {
 
 test "ObjectIdentifier.fromArcString" {
     const oid = try ObjectIdentifier.fromArcString(test_oid);
+
     try std.testing.expectEqualSlices(u8, &test_oid_encoding, oid.getBytes());
+    // Make sure we are initializing comptime OIDs correctly as well.
+    try std.testing.expectEqualDeep(oid, const_oid);
 }
 
 test "ObjectIdentifier.read" {
