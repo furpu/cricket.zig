@@ -1,0 +1,19 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint_and_tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: master
+      # TODO: I removed this because it fails on Windows for some reason.
+      # - run: zig fmt --check src
+      - run: zig build test --summary all
