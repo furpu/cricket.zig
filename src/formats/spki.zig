@@ -17,3 +17,29 @@ pub fn AlgorithmIdentifier(comptime ParamsT: type) type {
         params: ?ParamsT,
     };
 }
+
+pub fn SubjectPublicKeyInfo(comptime ParamsT: type) type {
+    return struct {
+        algorithm_identifier: AlgorithmIdentifier(ParamsT),
+        public_key: der.BitString,
+    };
+}
+
+const std = @import("std");
+const Pem = @import("Pem.zig");
+const ecdsa = @import("ecdsa.zig");
+
+test "decode" {
+    const pem_str =
+        \\-----BEGIN PUBLIC KEY-----
+        \\MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEVs/o5+uQbTjL3chynL4wXgUg2R9
+        \\q9UU8I5mEovUf86QZ7kOBIjJwqnzD1omageEHWwHdBO6B+dFabmdT9POxg==
+        \\-----END PUBLIC KEY-----
+    ;
+
+    const parsed = try Pem.parse(std.testing.allocator, pem_str);
+    defer parsed.deinit();
+
+    const spki = try der.read(SubjectPublicKeyInfo(der.Any), parsed.msg);
+    try std.testing.expect(spki.algorithm_identifier.oid.matches(&ecdsa.public_key_oid));
+}

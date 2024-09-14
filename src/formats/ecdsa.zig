@@ -2,8 +2,11 @@ const std = @import("std");
 
 const der = @import("der.zig");
 
-// Named curve OIDs from:
-// https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
+/// EC public key OID:
+pub const public_key_oid = der.ObjectIdentifier.fromArcStringComptime("1.2.840.10045.2.1");
+
+/// Named curve OIDs from:
+/// https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
 pub const secp256r1_oid = der.ObjectIdentifier.fromArcStringComptime("1.2.840.10045.3.1.7");
 
 /// Supported curves.
