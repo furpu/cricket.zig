@@ -15,7 +15,10 @@ pub const ContextSpecific = types.ContextSpecific;
 
 pub fn read(comptime T: type, input: []const u8) !T {
     var reader = Reader.init(input);
-    return internal.read(T, &reader, .{});
+    const val = try internal.read(T, &reader, .{});
+    if (reader.stream.pos < reader.stream.buffer.len) return error.Decode;
+
+    return val;
 }
 
 const UniversalTagNumber = Header.Tag.UniversalTagNumber;
@@ -86,6 +89,6 @@ test "read" {
         try std.testing.expectEqualDeep(TestUnion{ .s = "abc" }, try read(TestUnion, input2));
 
         const input3 = &.{ @intFromEnum(UniversalTagNumber.bit_string), 1, 0 };
-        try std.testing.expectError(error.Cast, read(TestUnion, input3));
+        try std.testing.expectError(error.Decode, read(TestUnion, input3));
     }
 }

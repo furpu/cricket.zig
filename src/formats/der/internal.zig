@@ -80,15 +80,16 @@ fn readStruct(comptime T: type, type_info: Type.Struct, reader: *Reader, opts: R
         };
     }
 
+    if (sequence_reader.stream.pos < sequence_reader.stream.buffer.len) return error.Decode;
+
     return ret_val;
 }
 
 fn readOptional(comptime T: type, reader: *Reader, opts: ReadOptions) !?T {
     const reader_pos = reader.stream.pos;
-    if (reader_pos >= reader.stream.buffer.len) return null;
-
     const ret_val = read(T, reader, opts) catch |err| {
         reader.stream.pos = reader_pos;
+
         switch (err) {
             error.UnexpectedTag, error.UnexpectedClass => return null,
             else => return err,
@@ -108,7 +109,7 @@ fn readUnion(comptime T: type, type_info: Type.Union, reader: *Reader, opts: Rea
         if (val) |v| return @unionInit(T, field.name, v);
     }
 
-    return error.Cast;
+    return error.Decode;
 }
 
 fn selectRead(comptime T: type, reader: *Reader, value_only: ?u28) !T {

@@ -255,6 +255,71 @@ pub const ObjectIdentifier = struct {
         return fromArcString(s) catch |err| @compileError(@errorName(err));
     }
 
+    pub fn arcStringEncodeByteSize(self: *const ObjectIdentifier) !usize {
+        if (self.len == 0) return error.Empty;
+
+        // start with 3 because we already accounted for the first byte
+        // (which is encoded differently than the rest) and it's always
+        // in the format a.b
+        var size: usize = 2;
+        // start with 2 to account for the required dots correctly later.
+        var arc_count: usize = 2;
+        var start: usize = 1;
+        var end: usize = 1;
+        while (true) {
+            if (start == self.len) break;
+
+            const byte = self.buffer[end];
+            end += 1;
+
+            if (byte & 0x80 == 0) {
+                const arc_int = try vlq.decodeInt(u64, self.buffer[start..end]);
+
+                // Count the number of bytes required to represent the integer as a string.
+                size += std.fmt.count("{}", .{arc_int});
+                arc_count += 1;
+
+                start = end;
+            }
+        }
+
+        // Add the number of dots that will be required between the arcs
+        size += arc_count - 1;
+
+        return size;
+    }
+
+    pub fn arcStringEncodeByteSizeComptime(comptime self: *const ObjectIdentifier) usize {
+        return self.arcStringEncodeByteSize() catch |err| @compileError(@errorName(err));
+    }
+
+    pub fn toArcString(self: *const ObjectIdentifier, buf: []u8) ![]const u8 {
+        if (self.len == 0) return error.Empty;
+
+        const first_digit = self.buffer[0] / 40;
+        const second_digit = if (first_digit < 2) self.buffer[0] % 40 else self.buffer[0] - 80;
+
+        var stream = std.io.fixedBufferStream(buf);
+        try stream.writer().print("{}.{}", .{ first_digit, second_digit });
+
+        var start: usize = 1;
+        var end: usize = 1;
+        while (true) {
+            if (start == self.len) break;
+
+            const byte = self.buffer[end];
+            end += 1;
+
+            if (byte & 0x80 == 0) {
+                const arc_int = try vlq.decodeInt(u64, self.buffer[start..end]);
+                try stream.writer().print(".{}", .{arc_int});
+                start = end;
+            }
+        }
+
+        return stream.getWritten();
+    }
+
     pub fn read(reader: *Reader) ReadError!ObjectIdentifier {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.object_identifier), .universal);
         return readValue(reader, header.length);
@@ -333,7 +398,7 @@ pub fn ContextSpecific(comptime T: type, comptime M: TagMode, tag_number: compti
             const Self = @This();
             pub const __der_ctx_spc: void = {};
 
-            pub fn read(reader: *Reader) ReadError!Self {
+            pub fn read(reader: *Reader) !Self {
                 // TODO: verify lengths provided by headers?
                 const header = try reader.readHeaderExact(tag_number, .context_specific);
                 const bytes = try reader.readBytes(header.length);
@@ -465,6 +530,20 @@ test "ObjectIdentifier.fromArcString" {
     try std.testing.expectError(error.InvalidCharacter, ObjectIdentifier.fromArcString("1.2."));
     try std.testing.expectError(error.InvalidCharacter, ObjectIdentifier.fromArcString("1.2.a"));
     try std.testing.expectError(error.OidTooLong, ObjectIdentifier.fromArcString(invalid_long_test_oid));
+}
+
+test "ObjectIdentifier.arcStringEncodeByteSize" {
+    const oid = comptime ObjectIdentifier.fromArcStringComptime(test_oid);
+    try std.testing.expectEqual(test_oid.len, oid.arcStringEncodeByteSize());
+}
+
+test "ObjectIdentifier.toArcString" {
+    const oid = comptime ObjectIdentifier.fromArcStringComptime(test_oid);
+
+    var buf: [oid.arcStringEncodeByteSizeComptime()]u8 = undefined;
+    const encoded_slice = try oid.toArcString(&buf);
+
+    try std.testing.expectEqualStrings(test_oid, encoded_slice);
 }
 
 test "ObjectIdentifier.read" {

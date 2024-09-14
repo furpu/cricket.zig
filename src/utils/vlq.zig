@@ -88,14 +88,22 @@ pub fn decode(input: []const u8, buf: []u8) []const u8 {
     return ret;
 }
 
+pub fn decodeInt(comptime T: type, input: []const u8) !T {
+    if (calcDecodeBufSize(input.len) > @sizeOf(T)) return error.IntTypeTooSmall;
+    var buf: [@sizeOf(T)]u8 = undefined;
+    const decoded_slice = decode(input, &buf);
+
+    return std.mem.readVarInt(T, decoded_slice, .big);
+}
+
 test "encode" {
     const test_val: u32 = 113549;
     var buf: [calcEncodeBufSize(test_val)]u8 = undefined;
     try std.testing.expectEqualSlices(u8, &[_]u8{ 134, 247, 13 }, encode(test_val, &buf));
 }
 
-test "decode" {
-    var buf: [16]u8 = undefined;
-    try std.testing.expectEqual(113549, std.mem.readVarInt(u32, decode(&.{ 134, 247, 13 }, &buf), .big));
-    try std.testing.expectEqual(840, std.mem.readVarInt(u32, decode(&.{ 134, 72 }, &buf), .big));
+test "decode and decodeInt" {
+    try std.testing.expectEqual(113549, decodeInt(u32, &.{ 134, 247, 13 }));
+    try std.testing.expectEqual(840, decodeInt(u32, &.{ 134, 72 }));
+    try std.testing.expectError(error.IntTypeTooSmall, decodeInt(u8, &.{ 134, 72 }));
 }

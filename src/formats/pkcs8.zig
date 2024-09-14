@@ -71,8 +71,8 @@ pub fn PrivateKeyInfo(comptime PrivKeyT: type) type {
         // Using der.Any here because we currently ignore the algorithm identifier parameters.
         private_key_algorithm: spki.AlgorithmIdentifier(der.Any),
         private_key: der.types.OctetString.Nested(PrivKeyT),
-        attributes: ?der.ContextSpecific(der.Any, .implicit, 0),
-        public_key: ?der.ContextSpecific(der.BitString, .implicit, 1),
+        attributes: ?der.ContextSpecific(der.Any, .explicit, 0),
+        public_key: ?der.ContextSpecific(der.BitString, .explicit, 1),
 
         const Self = @This();
 
