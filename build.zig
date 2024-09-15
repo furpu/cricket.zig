@@ -5,7 +5,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const gen_docs = b.option(bool, "gen-docs", "Generates documentation files") orelse false;
-    const gen_coverage = b.option(bool, "gen-coverage", "Generates test coverage reports") orelse false;
+    const report_coverage = b.option(bool, "report-coverage", "Generates a test code coverage using kcov") orelse false;
+    const upload_coverage = b.option(bool, "upload-coverage", "Uploads coverage report to coveralls.io") orelse false;
 
     _ = b.addModule("cricket", .{
         .root_source_file = b.path("src/cricket.zig"),
@@ -33,20 +34,39 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // TODO: figure out how to make this work using Zig's build system.
-    // i.e. make it move the generated files to the install folder.
-    if (gen_coverage) {
-        lib_unit_tests.setExecCmd(&.{
-            "kcov",
-            "--include-path=src",
-            "--clean",
-            "kcov-out",
-            null, // to get zig to use the --test-cmd-bin flag
-        });
-    }
-
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
-
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
+
+    if (report_coverage) {
+        // Generate coverage report with kcov
+        var run_kcov = b.addSystemCommand(&.{"kcov"});
+        run_kcov.addPrefixedDirectoryArg("--include-path=", b.path("src"));
+        run_kcov.addArg("--clean");
+
+        if (upload_coverage) {
+            const repo_token = std.process.getEnvVarOwned(b.allocator, "COVERALLS_REPO_TOKEN") catch @panic("OOM");
+            defer b.allocator.free(repo_token);
+            const arg = std.mem.join(b.allocator, "=", &.{ "--coveralls-id", repo_token }) catch @panic("OOM");
+            defer b.allocator.free(arg);
+
+            run_kcov.addArg(arg);
+        }
+
+        const kcov_out_dir_path = run_kcov.addPrefixedOutputDirectoryArg("", "kcov-out");
+        run_kcov.addFileArg(lib_unit_tests.getEmittedBin());
+
+        run_kcov.has_side_effects = true;
+        run_kcov.stdio = .inherit;
+
+        const install_kcov_dir = b.addInstallDirectory(.{
+            .source_dir = kcov_out_dir_path,
+            .install_dir = .prefix,
+            .install_subdir = "kcov-out",
+        });
+        install_kcov_dir.step.dependOn(&run_kcov.step);
+
+        test_step.dependOn(&install_kcov_dir.step);
+    } else {
+        const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+        test_step.dependOn(&run_lib_unit_tests.step);
+    }
 }
