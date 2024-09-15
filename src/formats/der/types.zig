@@ -30,6 +30,18 @@ pub const Any = struct {
         const bytes = try reader.readBytes(header.length);
         return .{ .tag = header.tag, .bytes = bytes };
     }
+
+    pub fn cast(self: Any, comptime T: type) !T {
+        var reader = Reader.init(self.bytes);
+        // TODO: implement type check based on tag.
+        // e.g.: if tag == .sequence then check if T is a struct.
+        return internal.read(T, &reader, .{
+            .value_only = .{
+                .length = @intCast(self.bytes.len),
+                .tag = self.tag,
+            },
+        });
+    }
 };
 
 /// Signed arbitrary precision ASN.1 `INTEGER` type.
