@@ -16,7 +16,7 @@ pub const ReadError = error{
 pub const CastError = error{Overflow};
 
 pub const Any = struct {
-    tag: ?Header.Tag,
+    tag: Header.Tag,
     bytes: []const u8,
 
     pub fn read(reader: *Reader) ReadError!Any {
@@ -26,9 +26,9 @@ pub const Any = struct {
         return .{ .tag = header.tag, .bytes = bytes };
     }
 
-    pub fn readValue(reader: *Reader, length: u28) ReadError!Any {
-        const bytes = try reader.readBytes(length);
-        return .{ .tag = null, .bytes = bytes };
+    pub fn readValue(reader: *Reader, header: Header) ReadError!Any {
+        const bytes = try reader.readBytes(header.length);
+        return .{ .tag = header.tag, .bytes = bytes };
     }
 };
 
@@ -43,12 +43,12 @@ pub const Integer = struct {
     /// Caller is responsible for saving and restoring the reader's position.
     pub fn read(reader: *Reader) ReadError!Integer {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.integer), .universal);
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
     /// Reads an integer value of the given length from the given reader.
-    pub fn readValue(reader: *Reader, length: u28) ReadError!Integer {
-        const bytes = try reader.readBytes(length);
+    pub fn readValue(reader: *Reader, header: Header) ReadError!Integer {
+        const bytes = try reader.readBytes(header.length);
         try validateCanonical(bytes);
 
         return .{ .bytes = bytes };
@@ -94,16 +94,16 @@ pub const BitString = struct {
 
     pub fn read(reader: *Reader) ReadError!BitString {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.bit_string), .universal);
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
-    pub fn readValue(reader: *Reader, length: u28) ReadError!BitString {
-        if (length < 1) return error.Empty;
+    pub fn readValue(reader: *Reader, header: Header) ReadError!BitString {
+        if (header.length < 1) return error.Empty;
 
         const unused_bits_byte = try reader.readByte();
         if (unused_bits_byte > 7) return error.MaxUnusedBitsExceeded;
 
-        const bytes = try reader.readBytes(length - 1);
+        const bytes = try reader.readBytes(header.length - 1);
 
         return .{
             .bytes = bytes,
@@ -119,11 +119,11 @@ pub const OctetString = struct {
 
     pub fn read(reader: *Reader) ReadError!OctetString {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.octet_string), .universal);
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
-    pub fn readValue(reader: *Reader, length: u28) ReadError!OctetString {
-        const bytes = try reader.readBytes(length);
+    pub fn readValue(reader: *Reader, header: Header) ReadError!OctetString {
+        const bytes = try reader.readBytes(header.length);
 
         return .{ .bytes = bytes };
     }
@@ -152,11 +152,11 @@ pub const OctetString = struct {
 pub const Null = struct {
     pub fn read(reader: *Reader) ReadError!Null {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.null), .universal);
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
-    pub fn readValue(_: *Reader, length: u28) ReadError!Null {
-        if (length > 0) return error.NonCanonical;
+    pub fn readValue(_: *Reader, header: Header) ReadError!Null {
+        if (header.length > 0) return error.NonCanonical;
         return .{};
     }
 };
@@ -322,12 +322,12 @@ pub const ObjectIdentifier = struct {
 
     pub fn read(reader: *Reader) ReadError!ObjectIdentifier {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.object_identifier), .universal);
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
-    pub fn readValue(reader: *Reader, length: u28) ReadError!ObjectIdentifier {
-        if (length > max_length) return error.OidTooLong;
-        const bytes = try reader.readBytes(length);
+    pub fn readValue(reader: *Reader, header: Header) ReadError!ObjectIdentifier {
+        if (header.length > max_length) return error.OidTooLong;
+        const bytes = try reader.readBytes(header.length);
 
         return ObjectIdentifier.init(bytes);
     }
@@ -354,11 +354,11 @@ pub const Sequence = struct {
     pub fn read(reader: *Reader) ReadError!Sequence {
         const header = try reader.readHeaderExact(@intFromEnum(Header.Tag.UniversalTagNumber.sequence), .universal);
         if (!header.tag.getConstructed()) return error.NonCanonical;
-        return readValue(reader, header.length);
+        return readValue(reader, header);
     }
 
-    pub fn readValue(reader: *Reader, length: u28) ReadError!Sequence {
-        const bytes = try reader.readBytes(length);
+    pub fn readValue(reader: *Reader, header: Header) ReadError!Sequence {
+        const bytes = try reader.readBytes(header.length);
         return .{ .bytes = bytes };
     }
 
@@ -387,7 +387,7 @@ pub fn ContextSpecific(comptime T: type, comptime M: TagMode, tag_number: compti
                 const bytes = try reader.readBytes(header.length);
 
                 var bytes_reader = Reader.init(bytes);
-                const value = try internal.read(T, &bytes_reader, .{ .value_only = @intCast(bytes.len) });
+                const value = try internal.read(T, &bytes_reader, .{ .value_only = header });
 
                 return .{ .value = value };
             }

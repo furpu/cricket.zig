@@ -1,6 +1,7 @@
 const std = @import("std");
 const Type = std.builtin.Type;
 
+const Header = @import("Header.zig");
 const Reader = @import("Reader.zig");
 const types = @import("types.zig");
 
@@ -15,7 +16,7 @@ const asn1_types = [_]type{
 };
 
 pub const ReadOptions = struct {
-    value_only: ?u28 = null,
+    value_only: ?Header = null,
 };
 
 pub fn read(comptime T: type, reader: *Reader, opts: ReadOptions) !T {
@@ -112,9 +113,9 @@ fn readUnion(comptime T: type, type_info: Type.Union, reader: *Reader, opts: Rea
     return error.Decode;
 }
 
-fn selectRead(comptime T: type, reader: *Reader, value_only: ?u28) !T {
-    if (value_only) |len| {
-        return T.readValue(reader, len);
+fn selectRead(comptime T: type, reader: *Reader, value_only: ?Header) !T {
+    if (value_only) |header| {
+        return T.readValue(reader, header);
     }
     return T.read(reader);
 }
