@@ -15,6 +15,15 @@ jobs:
         run: sudo apt-get install kcov -y
       - name: Run tests with coverage report
         run: zig build test --summary all -Dreport-coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
+        with:
+          directory: ./zig-out/kcov-out
+          fail_ci_if_error: true
+          verbose: true
+
   lint_and_tests:
     strategy:
       matrix:
