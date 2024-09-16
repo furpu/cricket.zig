@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) void {
 
     const gen_docs = b.option(bool, "gen-docs", "Generates documentation files") orelse false;
     const report_coverage = b.option(bool, "report-coverage", "Generates a test code coverage using kcov") orelse false;
-    const upload_coverage = b.option(bool, "upload-coverage", "Uploads coverage report to coveralls.io") orelse false;
 
     _ = b.addModule("cricket", .{
         .root_source_file = b.path("src/cricket.zig"),
@@ -41,15 +40,6 @@ pub fn build(b: *std.Build) void {
         var run_kcov = b.addSystemCommand(&.{"kcov"});
         run_kcov.addPrefixedDirectoryArg("--include-path=", b.path("src"));
         run_kcov.addArg("--clean");
-
-        if (upload_coverage) {
-            const repo_token = std.process.getEnvVarOwned(b.allocator, "COVERALLS_REPO_TOKEN") catch @panic("OOM");
-            defer b.allocator.free(repo_token);
-            const arg = std.mem.join(b.allocator, "=", &.{ "--coveralls-id", repo_token }) catch @panic("OOM");
-            defer b.allocator.free(arg);
-
-            run_kcov.addArg(arg);
-        }
 
         const kcov_out_dir_path = run_kcov.addPrefixedOutputDirectoryArg("", "kcov-out");
         run_kcov.addFileArg(lib_unit_tests.getEmittedBin());
