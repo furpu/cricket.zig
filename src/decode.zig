@@ -101,4 +101,13 @@ test fromPem {
 
         try std.testing.expect(decoded.value.kind == .ecdsa_public_key);
     }
+
+    {
+        const pem_str =
+            \\-----BEGIN UNKNOWN-----
+            \\-----END UNKNWON-----
+        ;
+
+        try std.testing.expectError(error.UnknownEncoding, fromPem(std.testing.allocator, pem_str));
+    }
 }
