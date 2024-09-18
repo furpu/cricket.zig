@@ -3,18 +3,17 @@ const builtin = @import("builtin");
 const mem = std.mem;
 const ascii = std.ascii;
 const Allocator = mem.Allocator;
-const ArenaAllocator = std.heap.ArenaAllocator;
 const Parser = @import("Pem/Parser.zig");
 
 const Self = @This();
 
-arena: *ArenaAllocator,
+allocator: Allocator,
 label: []const u8,
 msg: []const u8,
 
 pub fn deinit(self: Self) void {
-    self.arena.deinit();
-    self.arena.child_allocator.destroy(self.arena);
+    self.allocator.free(self.label);
+    self.allocator.free(self.msg);
 }
 
 pub fn parse(allocator: Allocator, input: []const u8) !Self {
@@ -37,18 +36,14 @@ const PemParser = struct {
     const eb_end_str = "-----";
 
     pub fn parse(self: *PemParser, allocator: Allocator) !Self {
-        var parsed = Self{ .arena = undefined, .label = undefined, .msg = undefined };
-        parsed.arena = try allocator.create(ArenaAllocator);
-        parsed.arena.* = ArenaAllocator.init(allocator);
-        errdefer parsed.deinit();
-
-        parsed.label = try self.parsePreeb(parsed.arena.allocator());
+        const label = try self.parsePreeb(allocator);
+        errdefer allocator.free(label);
         self.inner.skip(isWhitespace);
         try self.parseEol();
 
-        parsed.msg = try self.parseMsg(parsed.arena.allocator());
+        const msg = try self.parseMsg(allocator);
 
-        return parsed;
+        return .{ .allocator = allocator, .label = label, .msg = msg };
     }
 
     fn parsePreeb(self: *PemParser, allocator: Allocator) ![]const u8 {
