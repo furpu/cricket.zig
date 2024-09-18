@@ -76,8 +76,8 @@ fn readStruct(comptime T: type, type_info: Type.Struct, reader: *Reader, opts: R
     var ret_val: T = undefined;
     inline for (type_info.fields) |field| {
         @field(ret_val, field.name) = switch (@typeInfo(field.type)) {
-            .optional => |field_type| try readOptional(field_type.child, &sequence_reader, opts),
-            else => try read(field.type, &sequence_reader, opts),
+            .optional => |field_type| try readOptional(field_type.child, &sequence_reader, .{}),
+            else => try read(field.type, &sequence_reader, .{}),
         };
     }
 
@@ -88,6 +88,8 @@ fn readStruct(comptime T: type, type_info: Type.Struct, reader: *Reader, opts: R
 
 fn readOptional(comptime T: type, reader: *Reader, opts: ReadOptions) !?T {
     const reader_pos = reader.stream.pos;
+    if (reader_pos >= reader.stream.buffer.len) return null;
+
     const ret_val = read(T, reader, opts) catch |err| {
         reader.stream.pos = reader_pos;
 
