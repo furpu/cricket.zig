@@ -43,6 +43,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{matrix.os}}
+    needs: [lint_and_tests_linux, lint_and_tests]
     steps:
       - uses: actions/checkout@v3
       - uses: mlugg/setup-zig@v1
