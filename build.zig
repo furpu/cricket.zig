@@ -7,12 +7,39 @@ pub fn build(b: *std.Build) void {
     const gen_docs = b.option(bool, "gen-docs", "Generates documentation files") orelse false;
     const report_coverage = b.option(bool, "report-coverage", "Generates a test code coverage using kcov") orelse false;
 
-    _ = b.addModule("cricket", .{
+    const cricket = b.addModule("cricket", .{
         .root_source_file = b.path("src/cricket.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    // Examples
+    const examples_step = b.step("examples", "Build all examples");
+    const example_files = [_][]const u8{
+        "signer_verifier.zig",
+    };
+
+    for (example_files) |filename| {
+        const example_name = blk: {
+            var split_iter = std.mem.splitScalar(u8, filename, '.');
+            break :blk split_iter.next().?;
+        };
+
+        const example_exec = b.addExecutable(.{
+            .name = example_name,
+            .root_source_file = b.path(b.pathJoin(&.{ "examples", filename })),
+            .target = target,
+            .optimize = optimize,
+        });
+        // Make cricket.zig available for examples
+        example_exec.root_module.addImport("cricket", cricket);
+
+        const install_example = b.addInstallArtifact(example_exec, .{});
+
+        examples_step.dependOn(&install_example.step);
+    }
+
+    // Docs
     if (gen_docs) {
         const docs = b.addObject(.{
             .name = "docs",
@@ -28,6 +55,7 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&install_docs.step);
     }
 
+    // Tests
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/cricket.zig"),
         .target = target,
