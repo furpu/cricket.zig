@@ -9,8 +9,6 @@ const std = @import("std");
 
 test {
     comptime {
-        std.testing.refAllDecls(decode);
-        std.testing.refAllDeclsRecursive(formats);
-        std.testing.refAllDeclsRecursive(utils);
+        std.testing.refAllDeclsRecursive(@This());
     }
 }
