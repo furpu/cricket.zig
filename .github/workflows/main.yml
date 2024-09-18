@@ -49,5 +49,5 @@ jobs:
       - uses: mlugg/setup-zig@v1
         with:
           version: master
-      - name: Run tests
+      - name: Build examples
         run: zig build examples --summary all
