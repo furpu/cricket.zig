@@ -5,8 +5,8 @@ const Allocator = std.mem.Allocator;
 const formats = @import("formats.zig");
 
 pub const KeyKind = enum {
-    ecdsa_private_key,
-    ecdsa_public_key,
+    ec_private_key,
+    ec_public_key,
 };
 
 pub const Value = struct {
@@ -36,19 +36,19 @@ pub fn fromPem(allocator: Allocator, input: []const u8) !Decoded {
 fn valueFromPem(pem: formats.Pem) !Value {
     if (mem.eql(u8, pem.label, "PRIVATE KEY")) {
         const ki = try formats.der.read(formats.pkcs8.PrivateKeyInfo(formats.der.Any), pem.msg);
-        if (ki.private_key_algorithm.oid.matches(&formats.ecdsa.public_key_oid)) {
-            const ec = try ki.private_key.value.cast(formats.ecdsa.EcPrivateKey);
-            return .{ .kind = .ecdsa_private_key, .bytes = ec.private_key };
+        if (ki.private_key_algorithm.oid.matches(&formats.ec.public_key_oid)) {
+            const ec = try ki.private_key.value.cast(formats.ec.EcPrivateKey);
+            return .{ .kind = .ec_private_key, .bytes = ec.private_key };
         } else {
             return error.UnsupportedAlgorithm;
         }
     } else if (mem.eql(u8, pem.label, "EC PRIVATE KEY")) {
-        const ki = try formats.der.read(formats.ecdsa.EcPrivateKey, pem.msg);
-        return .{ .kind = .ecdsa_private_key, .bytes = ki.private_key };
+        const ki = try formats.der.read(formats.ec.EcPrivateKey, pem.msg);
+        return .{ .kind = .ec_private_key, .bytes = ki.private_key };
     } else if (mem.eql(u8, pem.label, "PUBLIC KEY")) {
         const ki = try formats.der.read(formats.spki.SubjectPublicKeyInfo(formats.der.Any), pem.msg);
-        if (ki.algorithm_identifier.oid.matches(&formats.ecdsa.public_key_oid)) {
-            return .{ .kind = .ecdsa_public_key, .bytes = ki.public_key.bytes };
+        if (ki.algorithm_identifier.oid.matches(&formats.ec.public_key_oid)) {
+            return .{ .kind = .ec_public_key, .bytes = ki.public_key.bytes };
         }
 
         return error.UnsupportedAlgorithm;
@@ -70,7 +70,7 @@ test fromPem {
         var decoded = try fromPem(std.testing.allocator, pem_str);
         defer decoded.deinit();
 
-        try std.testing.expect(decoded.value.kind == .ecdsa_private_key);
+        try std.testing.expect(decoded.value.kind == .ec_private_key);
     }
 
     {
@@ -85,7 +85,7 @@ test fromPem {
         var decoded = try fromPem(std.testing.allocator, pem_str);
         defer decoded.deinit();
 
-        try std.testing.expect(decoded.value.kind == .ecdsa_private_key);
+        try std.testing.expect(decoded.value.kind == .ec_private_key);
     }
 
     {
@@ -99,7 +99,7 @@ test fromPem {
         var decoded = try fromPem(std.testing.allocator, pem_str);
         defer decoded.deinit();
 
-        try std.testing.expect(decoded.value.kind == .ecdsa_public_key);
+        try std.testing.expect(decoded.value.kind == .ec_public_key);
     }
 
     {

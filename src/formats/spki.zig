@@ -27,7 +27,7 @@ pub fn SubjectPublicKeyInfo(comptime ParamsT: type) type {
 
 const std = @import("std");
 const Pem = @import("Pem.zig");
-const ecdsa = @import("ecdsa.zig");
+const ec = @import("ec.zig");
 
 test "decode" {
     const pem_str =
@@ -41,8 +41,8 @@ test "decode" {
     defer parsed.deinit();
 
     const spki = try der.read(SubjectPublicKeyInfo(der.Any), parsed.msg);
-    try std.testing.expect(spki.algorithm_identifier.oid.matches(&ecdsa.public_key_oid));
+    try std.testing.expect(spki.algorithm_identifier.oid.matches(&ec.public_key_oid));
 
-    const params = try spki.algorithm_identifier.params.?.cast(ecdsa.EcParameters);
-    try std.testing.expect(params.named_curve.matches(&ecdsa.secp256r1_oid));
+    const params = try spki.algorithm_identifier.params.?.cast(ec.EcParameters);
+    try std.testing.expect(params.named_curve.matches(&ec.secp256r1_oid));
 }
