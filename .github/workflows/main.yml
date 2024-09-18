@@ -39,3 +39,5 @@ jobs:
       # - run: zig fmt --check src
       - name: Run tests
         run: zig build test --summary all
+      - name: Build examples
+        run: zig build examples --summary all
