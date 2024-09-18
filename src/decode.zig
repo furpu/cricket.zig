@@ -1,7 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
 const Allocator = std.mem.Allocator;
-const ArenaAllocator = std.heap.ArenaAllocator;
 
 const formats = @import("formats.zig");
 
@@ -16,21 +15,22 @@ pub const Value = struct {
 };
 
 pub const Decoded = struct {
-    arena: *ArenaAllocator,
+    allocator: Allocator,
     value: Value,
 
-    pub fn deinit(self: *Decoded) void {
-        self.arena.deinit();
-        self.arena.child_allocator.destroy(self.arena);
+    pub fn deinit(self: Decoded) void {
+        self.allocator.free(self.value.bytes);
     }
 };
 
 pub fn fromPem(allocator: Allocator, input: []const u8) !Decoded {
     var parsed_pem = try formats.Pem.parse(allocator, input);
-    errdefer parsed_pem.deinit();
+    defer parsed_pem.deinit();
 
-    const value = try valueFromPem(parsed_pem);
-    return .{ .arena = parsed_pem.arena, .value = value };
+    var value = try valueFromPem(parsed_pem);
+    value.bytes = try allocator.dupe(u8, value.bytes);
+
+    return .{ .allocator = allocator, .value = value };
 }
 
 fn valueFromPem(pem: formats.Pem) !Value {
