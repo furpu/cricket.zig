@@ -110,4 +110,18 @@ test fromPem {
 
         try std.testing.expectError(error.UnknownEncoding, fromPem(std.testing.allocator, pem_str));
     }
+
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, testFromPemAllocations, .{});
+}
+
+fn testFromPemAllocations(allocator: Allocator) !void {
+    const pem_str =
+        \\-----BEGIN PUBLIC KEY-----
+        \\MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEVs/o5+uQbTjL3chynL4wXgUg2R9
+        \\q9UU8I5mEovUf86QZ7kOBIjJwqnzD1omageEHWwHdBO6B+dFabmdT9POxg==
+        \\-----END PUBLIC KEY-----
+    ;
+
+    var decoded = try fromPem(allocator, pem_str);
+    defer decoded.deinit();
 }

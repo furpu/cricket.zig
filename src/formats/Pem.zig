@@ -18,14 +18,7 @@ pub fn deinit(self: Self) void {
 
 pub fn parse(allocator: Allocator, input: []const u8) !Self {
     var p = PemParser{ .inner = .{ .input = input } };
-    const parsed = p.parse(allocator) catch |err| {
-        // TODO: Remove this and add proper error messages to Parser.
-        // I'm putting this here just to aid debugging for now.
-        if (builtin.is_test) std.debug.print("\"{s}\"\n", .{p.inner.input[p.inner.cursor..]});
-        return err;
-    };
-
-    return parsed;
+    return p.parse(allocator);
 }
 
 const PemParser = struct {
@@ -102,3 +95,17 @@ const PemParser = struct {
         return ascii.isAlphanumeric(c) or c == '+' or c == '/' or c == '=';
     }
 };
+
+test parse {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, testParseAllocations, .{});
+}
+
+fn testParseAllocations(allocator: Allocator) !void {
+    const pem_str =
+        \\-----BEGIN THELABEL-----
+        \\-----END THELABEL-----
+    ;
+
+    const parsed = try parse(allocator, pem_str);
+    defer parsed.deinit();
+}
