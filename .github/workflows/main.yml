@@ -25,7 +25,6 @@ jobs:
           directory: ./zig-out/kcov-out
           fail_ci_if_error: true
           verbose: true
-
   lint_and_tests:
     strategy:
       matrix:
@@ -39,5 +38,15 @@ jobs:
       # - run: zig fmt --check src
       - name: Run tests
         run: zig build test --summary all
-      - name: Build examples
+  build_examples:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: master
+      - name: Run tests
         run: zig build examples --summary all
