@@ -34,13 +34,12 @@ pub fn main() !u8 {
             std.debug.print("Signature: {s}\n", .{encoded_sig.items});
         },
         .verify => {
-            var sig: []const u8 = undefined;
-            if (args.sig) |s| {
-                sig = s;
+            const sig: []const u8 = if (args.sig) |s| blk: {
+                break :blk s;
             } else {
                 std.debug.print("missing signature\n", .{});
                 return 1;
-            }
+            };
 
             const decoded_sig_len = std.base64.url_safe_no_pad.Decoder.calcSizeForSlice(sig) catch {
                 std.debug.print("invalid signature encoding\n", .{});

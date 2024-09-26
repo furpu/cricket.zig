@@ -220,24 +220,22 @@ pub const ObjectIdentifier = struct {
 
         // Decodes the first 2 numbers which represent the encoding of the
         // first byte.
-        var first_arc: u8 = undefined;
-        if (split_iter.next()) |arc_str| {
+        const first_arc: u8 = if (split_iter.next()) |arc_str| blk: {
             if (arc_str.len == 0) return error.Empty;
             const arc = try std.fmt.parseUnsigned(u8, arc_str, 10);
             if (arc > 2) return error.NonCanonical;
-            first_arc = arc *% 40;
+            break :blk arc *% 40;
         } else {
             unreachable;
-        }
+        };
 
-        var second_arc: u8 = undefined;
-        if (split_iter.next()) |arc_str| {
+        const second_arc: u8 = if (split_iter.next()) |arc_str| blk: {
             const arc = try std.fmt.parseUnsigned(u8, arc_str, 10);
             if (first_arc < 2 and arc >= 40) return error.NonCanonical;
-            second_arc = arc;
+            break :blk arc;
         } else {
             return error.IncompleteFirstByte;
-        }
+        };
 
         _ = try buf_stream.write(&.{first_arc +% second_arc});
 
