@@ -36,7 +36,7 @@ pub fn read(comptime T: type, reader: *Reader, opts: ReadOptions) !T {
 }
 
 fn readPointer(type_info: Type.Pointer, reader: *Reader, opts: ReadOptions) ![]const u8 {
-    if (type_info.size != .Slice) @compileError("Not implemented for non-slice types");
+    if (type_info.size != .slice) @compileError("Not implemented for non-slice types");
     if (!type_info.is_const) @compileError("Only implemented for const slices");
     if (type_info.child != u8) @compileError("Only implemented for []const u8");
 
